@@ -12,9 +12,9 @@ import curses
 from queue import Queue
 from playsound import playsound
 import easyocr
-from Dota2_Timer import Dota2_Timer
-from Tormentor_Timer import TormentorTimer
-from Roshan_Timer import RoshanTimer
+from timers.Dota2_Timer import Dota2_Timer
+from timers.Tormentor_Timer import TormentorTimer
+from timers.Roshan_Timer import RoshanTimer
 from utils.cooldown import Respawn_Duration, Mode
 from utils.screen_areas import area_items, area_time
 from utils.terminal import TerminalWindow, SelfGrowingWindowGrid
@@ -242,7 +242,7 @@ def main(stdscr: curses._CursesWindow):
     window_grid.growWindowsHeightFirst()
 
     # Bottle rune timer
-    rune_timer = Dota2_Timer("Rune", settings)
+    rune_timer = Dota2_Timer("Rune")
     rune_timer.trigger_images(
         [os.path.join("images\\bottle\\runes", img) for img in os.listdir("images\\bottle\\runes")]
     )
@@ -265,7 +265,7 @@ def main(stdscr: curses._CursesWindow):
     rune_timer.onFinish(rune_finished)
     rune_timer.disabled = True  # don't check for runes until we see bottle
 
-    reset_rune = Dota2_Timer("Bottle", settings)
+    reset_rune = Dota2_Timer("Bottle")
     reset_rune.trigger_images(
         [os.path.join("bottle\\normal", img) for img in os.listdir("bottle\\normal")]
     )
@@ -282,8 +282,8 @@ def main(stdscr: curses._CursesWindow):
     # no duration, only the onFinish callback will run
     reset_rune.onFinish(normal_bottle_detected)
 
-    tormentor_timer = TormentorTimer("Tormentor", settings)
-    roshan_timer = RoshanTimer("Roshan", settings)
+    tormentor_timer = TormentorTimer("Tormentor")
+    roshan_timer = RoshanTimer("Roshan")
     timers: list[Dota2_Timer] = [tormentor_timer, roshan_timer, rune_timer, reset_rune]
     queue = Queue(maxsize=1)
     windows = [conf_win, timer_win, history_win]

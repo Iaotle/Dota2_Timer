@@ -1,4 +1,4 @@
-from Dota2_Timer import Dota2_Timer
+from timers.Dota2_Timer import Dota2_Timer
 import os
 import time
 import datetime

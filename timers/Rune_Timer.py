@@ -1,5 +1,5 @@
-from Dota2_Timer import Dota2_Timer
-from utils.settings import Settings
+from timers.Dota2_Timer import Dota2_Timer
+from utils.settings import settings
 import os
 from utils.screen_areas import area_items
 
@@ -27,12 +27,12 @@ from utils.screen_areas import area_items
 
 
 class Rune_Timer(Dota2_Timer):
-    def __init__(self, name: str, settings: Settings):
-        super().__init__(name, settings)
+    def __init__(self, name: str):
+        super().__init__(name)
         self.trigger_images(
             [os.path.join("images\\bottle\\runes", img) for img in os.listdir("images\\bottle\\runes")]
         )
-        self.timeout(self.settings.cooldowns.rune_cooldown() - 15)
+        self.timeout(settings.cooldowns.rune_cooldown() - 15)
         self.search_area(*area_items)
         self.audio_alert("./audio/bottle/rune_expiring.mp3")
         self.disabled = True
