@@ -1,6 +1,7 @@
 from __future__ import annotations
 import curses
 import datetime # needed for lazy f-string evaluation
+from utils.settings import settings  # needed for lazy f-string evaluation
 
 
 BORDER_WIDTH = 1
@@ -9,8 +10,6 @@ Y_OFFSET = 2
 
 
 
-def fstr(template):
-    return eval(f'f"""{template}"""')
 
 class TerminalWindow:
     def __getattr__(self, item):
@@ -27,11 +26,14 @@ class TerminalWindow:
         # TODO: writeable area is   x[BORDER_WIDTH + X_OFFSET] to x[ncols - BORDER_WIDTH - X_OFFSET]
         #                           y[BORDER_WIDTH + Y_OFFSET] to y[nlines - BORDER_WIDTH - Y_OFFSET]
   
+  
+    def fstr(self, template):
+        return eval(f'f"""{template}"""')
     def startWrite(self):
         if not self.disabled:
             self.window.clear()
             for line in self.header:
-                self._write(fstr(line))
+                self.write(self.fstr(line))
             
     # TODO: add header
     def resize(self, nlines, ncols):
