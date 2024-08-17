@@ -46,7 +46,7 @@ class Dota2_Timer:
             self.image_files[image] = cv.imread(image, cv.IMREAD_COLOR)
 
     def timeout(self, timeout):
-        """Set the timeout duration in seconds."""
+        """Set the timeout duration function."""
         self.duration = timeout
 
     def search_area(self, x, y, width, height):

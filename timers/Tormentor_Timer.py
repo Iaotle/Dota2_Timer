@@ -3,8 +3,7 @@ import os
 import time
 import datetime
 from threading import Timer
-from utils.cooldown import Respawn_Duration, Mode
-from utils.screen_areas import area_events
+from utils.screen_areas import area_events_truncated
 from utils.settings import settings
 
 class TormentorTimer(Dota2_Timer):
@@ -12,8 +11,8 @@ class TormentorTimer(Dota2_Timer):
     def __init__(self, name: str):
         super().__init__(name)
         self.trigger_images([os.path.join("images\\tormentor", img) for img in os.listdir("images\\tormentor")])
-        self.search_area(*area_events)
-        self.duration = settings.cooldowns.tormentor_cooldown
+        self.search_area(*area_events_truncated)
+        self.timeout(settings.cooldowns.tormentor_cooldown)
         self.history = True
         self.confidence = 0.85
         self.max_instances = 2

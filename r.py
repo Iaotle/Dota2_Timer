@@ -1,25 +1,26 @@
 from __future__ import annotations
 import asyncio
 import datetime
+import os
 from typing import Optional
 import pyautogui
 import cv2 as cv
 import numpy as np
+import easyocr
 import threading
-import os
 import time
 import curses
 from queue import Queue
-from playsound import playsound
-import easyocr
+from timers.Bottle_Timer import Bottle_Timer
 from timers.Dota2_Timer import Dota2_Timer
+from timers.Rune_Timer import Rune_Timer
 from timers.Tormentor_Timer import TormentorTimer
 from timers.Roshan_Timer import RoshanTimer
-from utils.cooldown import Respawn_Duration, Mode
-from utils.screen_areas import area_items, area_time
+from utils.screen_areas import area_time
 from utils.terminal import TerminalWindow, SelfGrowingWindowGrid
 from utils.history import TimestampedHistory
 from utils.constants import GRID_X, GRID_Y
+import pickle
 
 from utils.settings import settings
 
@@ -29,6 +30,9 @@ global_game_timedelta = datetime.timedelta(hours=0, minutes=0, seconds=0)
 
 async def process_timer(timer: Optional[Dota2_Timer], s: cv.typing.MatLike, global_game_timedelta: datetime.timedelta, history: TimestampedHistory):
     output = {}
+    if not timer or timer.disabled:
+        return output
+    
     if timer.started < timer.max_instances:
         found, output = await timer.detect_image(s)
         if found:
@@ -36,7 +40,7 @@ async def process_timer(timer: Optional[Dota2_Timer], s: cv.typing.MatLike, glob
                 output,
                 (
                     global_game_timedelta
-                    if not timer.settings.use_real_time
+                    if not settings.use_real_time
                     else datetime.timedelta(seconds=time.time())
                 ),
             )
@@ -68,12 +72,9 @@ class RunImageRecognition(threading.Thread):
 
     def run(self):
         # mutex
-        # c.acquire()
         while True:
             if not self.queue.empty():
                 asyncio.run(self.run_image_detection(*self.queue.get()))
-        # c.notify()
-        # c.release()
 
     # def detect_game_time(self, screenshot: cv.typing.MatLike, conf_win: TerminalWindow):
 
@@ -118,7 +119,6 @@ class RunImageRecognition(threading.Thread):
             actual_time = None
         
         global_game_timedelta = actual_time if actual_time else global_game_timedelta
-        
         if (global_game_timedelta.total_seconds() < 5 and not history.new_game):
             # start a new game
             timers = [timer.reset() for timer in timers]
@@ -173,7 +173,7 @@ def displayTimers(timer_win: TerminalWindow,timers: list[Dota2_Timer]):
             finished_accum = 0
             for started_time, scheduledTimer in timer.timers.items():
                 time_remaining = 0
-                if not timer.settings.use_real_time:
+                if not settings.use_real_time:
                     # alternative handling, use timedelta
                     time_remaining = timer.duration() - (
                         global_game_timedelta.total_seconds()
@@ -202,24 +202,24 @@ def displayTimers(timer_win: TerminalWindow,timers: list[Dota2_Timer]):
 
 
 def main(stdscr: curses._CursesWindow):
-    cooldowns = settings.cooldowns
     curses.curs_set(0)
     curses.resize_term(60, 165)  # lines, cols
     tick = time.time() - settings.image_detection_interval # start immediately
 
     # stdscr.keypad(True)
-    # stdscr.nodelay(True)
-    stdscr.timeout(settings.refresh_interval_curses)  # Refresh every
+    stdscr.nodelay(True)
+    # stdscr.timeout(settings.refresh_interval_curses)  # Refresh every
 
     # Create windows
     window_grid = SelfGrowingWindowGrid(stdscr, GRID_X, GRID_Y)
     timer_win = window_grid.addWindow(0, 0)
     
     timer_win.header = [
-        "q=quit, r=reset, m=mode, i/d=adjust image recognition o/k=adjust UI refresh",
-        "Using" + (" real" if settings.use_real_time else " game") + " time",
-        "{settings.cooldowns.currentMode()}, image recognition every {settings.image_detection_interval} seconds, UI refresh every {settings.image_detection_interval}ms",
-        " Real Time: {datetime.datetime.now()}",
+        "q=quit, r=reset, m=mode, i/d=adjust image recognition o/k=adjust UI refresh rate",
+        "t=toggle real time, c=toggle confidence window. l=load history",
+        "Using {'real time' if settings.use_real_time else 'game time'}",
+        "{settings.cooldowns.currentMode()}, image recognition every {settings.image_detection_interval} seconds, UI refresh every {settings.refresh_interval_curses}ms",
+        "Real Time: {datetime.datetime.now()}",
         "Timers:",
     ]
     
@@ -241,49 +241,33 @@ def main(stdscr: curses._CursesWindow):
     
     window_grid.growWindowsHeightFirst()
 
-    # Bottle rune timer
-    rune_timer = Dota2_Timer("Rune")
-    rune_timer.trigger_images(
-        [os.path.join("images\\bottle\\runes", img) for img in os.listdir("images\\bottle\\runes")]
-    )
-    rune_timer.timeout(cooldowns.rune_cooldown() - 15)  # warn 15 seconds before expiry
-    rune_timer.search_area(*area_items)
 
+
+
+
+    roshan_timer = RoshanTimer("Roshan")
+    tormentor_timer = TormentorTimer("Tormentor")
+    rune_timer = Rune_Timer("Rune")
     def rune_detected(self: Dota2_Timer):
         rune = self.detected_image_name.split("\\")[-1].split(".")[0]
         self.name = f"{rune} Rune"
-        # timeout:
-        self.timeout(cooldowns.rune_cooldown())
         reset_rune.started = False  # start checking for normal bottle
-
-    rune_timer.onDetected(rune_detected)
-    rune_timer.audio_alert("./audio/bottle/rune_expiring.mp3")
-
     def rune_finished(self: Dota2_Timer):
         reset_rune.started = True  # stop checking for normal bottle
 
+    rune_timer.onDetected(rune_detected)
     rune_timer.onFinish(rune_finished)
-    rune_timer.disabled = True  # don't check for runes until we see bottle
-
-    reset_rune = Dota2_Timer("Bottle")
-    reset_rune.trigger_images(
-        [os.path.join("bottle\\normal", img) for img in os.listdir("bottle\\normal")]
-    )
-    reset_rune.search_area(*area_items)
-
+    
+    reset_rune = Bottle_Timer("Bottle")
     def normal_bottle_detected(self: Dota2_Timer):
         if rune_timer.disabled:
             rune_timer.disabled = False
         if rune_timer.started:
             rune_timer.reset()
         reset_rune.started = 1  # start checking for normal bottle
-        # TODO: make classes for all these timers
-
     # no duration, only the onFinish callback will run
     reset_rune.onFinish(normal_bottle_detected)
 
-    tormentor_timer = TormentorTimer("Tormentor")
-    roshan_timer = RoshanTimer("Roshan")
     timers: list[Dota2_Timer] = [tormentor_timer, roshan_timer, rune_timer, reset_rune]
     queue = Queue(maxsize=1)
     windows = [conf_win, timer_win, history_win]
@@ -295,14 +279,13 @@ def main(stdscr: curses._CursesWindow):
         history.writeToWindow()
         # TODO: clear all windows, fix resizing leaving borders inside window
         lines, cols = stdscr.getmaxyx()
-        if stdscr.getch() == curses.KEY_RESIZE:
-            print(f"Resizing to {lines}x{cols}")
-            curses.resize_term(lines, cols)
-            window_grid.resize(lines, cols)
-            continue
+        # if stdscr.getch() == curses.KEY_RESIZE:
+        #     print(f"Resizing to {lines}x{cols}")
+        #     curses.resize_term(lines, cols)
+        #     window_grid.resize(lines, cols)
+        #     continue
 
         if time.time() - tick > settings.image_detection_interval:
-            # asyncio.run(RunImageRecognition.run_image_detection(timers, windows, history))
             try:
                 queue.put((timers, windows, history), timeout=0)
             except:
@@ -314,24 +297,44 @@ def main(stdscr: curses._CursesWindow):
         try:
             key = stdscr.getkey()
             if key == "q":
+                # pickle history to file
+                
+                # Load existing history if it exists
+                if os.path.exists("history.pkl"):
+                    with open("history.pkl", "rb") as f:
+                        previous_history, _  = pickle.load(f)
+                else:
+                    previous_history = []
+                # Merge the current history with the previous history
+                full_history = previous_history + history._history
+                with open("history.pkl", "wb") as f:
+                    pickle.dump((full_history, history.new_game), f)
+                    
+                
                 break
+            if key == "l":
+                # load history from file
+                with open("history.pkl", "rb") as f:
+                    history._history, history.new_game = pickle.load(f)
             if key == "r":
                 history.clear_history()
                 for timer in timers:
                     timer.reset()
             if key == "m":
-                print("Changing mode")
-                cooldowns.next()
-                if cooldowns.currentMode() == Mode.DEBUG:
-                    # TODO: handle this by adding/removing window from the grid
-                    # window_grid.removeWindow(conf_win)
+                # TODO: confidence should only be dependent on settings.show_confidence
+                settings.cooldowns.next()
+            if key == "c":
+                # TODO: handle this by adding/removing window from the grid
+                settings.show_confidence = not settings.show_confidence
+                conf_win.disabled = not settings.show_confidence
+                if settings.show_confidence:
                     # give 4/10 of the height to the timer window
                     window_grid.resizeWindow(timer_win, 0, 0, 6, 6)
-                    conf_win.disabled = False
                 else:
                     # give all the height to the timer window
                     window_grid.resizeWindow(timer_win, 0, 0, 6, 10)
-                    conf_win.disabled = True
+            if key == "t":
+                settings.use_real_time = not settings.use_real_time
             if key == "i":
                 settings.image_detection_interval = min(10, settings.image_detection_interval + 1)
             if key == "d":
@@ -342,7 +345,7 @@ def main(stdscr: curses._CursesWindow):
                 settings.refresh_interval_curses = max(10, settings.refresh_interval_curses - 10)
         except curses.error:
             pass
-        # curses.napms(refresh_interval_curses) # will fuck performance for some reason
+        # curses.napms(1) # will fuck performance of OCR
 
     curses.endwin()
 

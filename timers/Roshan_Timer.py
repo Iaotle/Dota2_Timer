@@ -12,4 +12,4 @@ class RoshanTimer(Dota2_Timer):
         self.audio_alert("./audio/roshan/roshan_respawn.mp3")
         self.history = True
         self.confidence = 0.95
-        self.duration = settings.cooldowns.roshan_cooldown
+        self.timeout(settings.cooldowns.roshan_cooldown)

@@ -61,7 +61,7 @@ class TimestampedHistory:
             event_name = event["event_name"]
             timestamp = event["timestamp"]
             timeouts = event["timeouts"]
-        
+
             # Convert timestamp to HH:MM:SS or MM:SS format
             timestamp_str = str(timestamp) if timestamp >= timedelta(hours=1) else str(timestamp)[2:]
             formatted_event = f"{timestamp_str} {event_name}"

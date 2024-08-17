@@ -32,7 +32,7 @@ class Rune_Timer(Dota2_Timer):
         self.trigger_images(
             [os.path.join("images\\bottle\\runes", img) for img in os.listdir("images\\bottle\\runes")]
         )
-        self.timeout(settings.cooldowns.rune_cooldown() - 15)
+        self.timeout(settings.cooldowns.rune_cooldown)
         self.search_area(*area_items)
         self.audio_alert("./audio/bottle/rune_expiring.mp3")
         self.disabled = True

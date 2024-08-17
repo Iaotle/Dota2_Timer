@@ -146,9 +146,6 @@ class WindowGrid:
         begin_y = self.windowHeight * grid_y
         begin_x = self.windowWidth * grid_x
 
-        print(
-            f"Resizing window to {int(nlines)}x{int(ncols)} at {int(begin_y)}, {int(begin_x)}"
-        )
         window.clear()
         window.mvwin(int(begin_y), int(begin_x))
         window.resize(int(nlines), int(ncols))
@@ -186,12 +183,13 @@ class WindowGrid:
 
         begin_y = self.windowHeight * grid_y
         begin_x = self.windowWidth * grid_x
+        # TODO: also do this when resizing
         if cell_width > 1 and grid_x + cell_width == self.x:
             # last window in row, take up remaining space
             ncols += self.cols % self.x
         if cell_height > 1 and grid_y + cell_height == self.y:
             # last window in column, take up remaining space
-            nlines += self.cols % self.y
+            nlines += self.lines % self.y
 
         window = TerminalWindow(int(nlines), int(ncols), int(begin_y), int(begin_x))
         self.windows.append(window)
