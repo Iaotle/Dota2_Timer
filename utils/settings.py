@@ -7,10 +7,11 @@ class Settings:
         self.mode =  Mode.TURBO if args.turbo else Mode.DEBUG if args.debug else Mode.NORMAL
         self.cooldowns = Respawn_Duration(self.mode)
         self.show_confidence = args.show_confidence
-        self.image_detection_interval = args.image_detection_interval
+        self.image_detection_interval: float = args.image_detection_interval
         self.refresh_interval_curses = args.refresh_interval_curses
         self.use_real_time = args.use_real_time
         self.history_window = None
+        self.rune_timer = not args.no_rune_timer
 
 parser = argparse.ArgumentParser(description="Dota 2 Timer")
 parser.add_argument("--turbo", action="store_true", help="Turbo mode", default=False)
@@ -43,5 +44,14 @@ parser.add_argument(
     help="Use real time instead of game time",
     default=False,
 )
+
+parser.add_argument(
+    "--no_rune_timer",
+    action="store_true",
+    help="Disable rune timer",
+    default=False,
+)
+
+
 args = parser.parse_args()
 settings = Settings(args)

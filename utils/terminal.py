@@ -1,6 +1,8 @@
 from __future__ import annotations
 import curses
-import datetime # needed for lazy f-string evaluation
+import datetime
+
+import numpy as np # needed for lazy f-string evaluation
 from utils.settings import settings  # needed for lazy f-string evaluation
 
 
@@ -40,7 +42,7 @@ class TerminalWindow:
         self.window.resize(nlines, ncols)
         self.height, self.width = nlines, ncols  # bookkeeping
 
-    def write(self, text):
+    def write(self, text, color_pair=0):
         if not self.disabled:
             # split text into lines of correct length and write them
             length = self.width - self.x_offset * 2 - self.border_width * 2
@@ -48,7 +50,7 @@ class TerminalWindow:
                 lines = [text[i : i + length] for i in range(0, len(text), length)]
                 # print(lines)
                 for line in lines:
-                    self._write(line)
+                    self._write(line, color_pair)
 
     def writeProgressBar(
         self,
@@ -58,6 +60,7 @@ class TerminalWindow:
         lsep="[",
         rsep="]",
         fill="■",
+        color_pair=0,
     ):
         """
         Create a progress bar with a message and a percentage.
@@ -81,23 +84,79 @@ class TerminalWindow:
             if showPercentage:
                 ret += f" {percent}"
             ret += f" {message}"
-            self.write(ret)
+            self.write(ret, color_pair)
+            
+    def writeRangeProgressBar(
+        self,
+        progress1: float,
+        progress2: float,
+        message: str,
+        showPercentage1: bool = False,
+        showpercentage2: bool = False,
+        lsep="[",
+        rsep="]",
+        fill1="■",
+        fill2="□",
+        color_pair1=0,
+        color_pair2=0,
+    ):
+        """
+        Create a 2-segment progress bar with a message and a percentage.
+        Will write a progress bar to the full width of the window."""
+        if not self.disabled:
+            percent1 = f"{progress1:.2%}".ljust(7)
+            percent2 = f"{progress2:.2%}".ljust(7)
+            max_size = self.width - self.x_offset * 2 - self.border_width * 2
 
-    def bigProgressBar(self, progress: float, message: str, showPercentage: bool = False):
-        blanks = " ".rjust(len(message))
-        self.writeProgressBar(progress,blanks,	lsep="┌",rsep="┐",fill="▄")
-        self.writeProgressBar(progress,blanks,	lsep="│",rsep="│",fill="█")
-        self.writeProgressBar(progress,message,	lsep="│",rsep="│",fill="█")
-        self.writeProgressBar(progress,blanks,	lsep="│",rsep="│",fill="█")
-        self.writeProgressBar(progress,blanks,	lsep="└",rsep="┘",fill="▀")
+            current_message_size = (
+                len(message) + len(lsep) + len(rsep) + len(fill1) + len(fill2) + 2
+            )  # +2 for the spaces
 
-    def writeLine(self, character):
+            if showPercentage1:
+                current_message_size += len(percent1) + 1 # +1 for the space
+                
+            # not done for the second percentage, since I show it instead of part of the bar
+            progress_bar_size = max_size - current_message_size
+
+            # Determine the size of each segment
+            segment1_size = int(progress1 * (progress_bar_size / 2))
+            segment2_size = int(progress2 * (progress_bar_size / 2))
+
+            # Generate the progress bar string
+            ret = f"{lsep}{fill1 * segment1_size}{fill2 * segment2_size}{' ' * (progress_bar_size - segment1_size - segment2_size)}{rsep}"
+            
+            
+            # Add percentages if required
+            
+            if showpercentage2:
+                go_back = len(rsep) + len(percent2) + 1
+                ret = ret[:-go_back]
+                ret += f" {percent2}{rsep}"
+                
+            if showPercentage1:
+                ret += f" {percent1}"
+            
+            ret += f" {message}"
+
+            # TODO: Write each segment with its respective color pair
+            self.write(ret, color_pair1)
+
+    def bigProgressBar(self, progress: float, message: str, color_pair=0):
+        blanks = "".rjust(len(message))
+        self.writeProgressBar(progress,blanks,	lsep="┌",rsep="┐",fill="▄", color_pair=color_pair)
+        self.writeProgressBar(progress,blanks,	lsep="│",rsep="│",fill="█", color_pair=color_pair)
+        self.writeProgressBar(progress,message,	lsep="│",rsep="│",fill="█", color_pair=color_pair)
+        self.writeProgressBar(progress,blanks,	lsep="│",rsep="│",fill="█", color_pair=color_pair)
+        self.writeProgressBar(progress,blanks,	lsep="└",rsep="┘",fill="▀", color_pair=color_pair)
+
+    def writeLine(self, character, color_pair=0):
         if not self.disabled:
             self._write(
-                character * (self.width - self.x_offset * 2 - self.border_width * 2)
+                character * (self.width - self.x_offset * 2 - self.border_width * 2),
+                color_pair=color_pair,
             )
 
-    def _write(self, text):
+    def _write(self, text, color_pair=0):
         # strip out newlines
         text = text.replace("\n", "")
         if not self.disabled and text:
@@ -106,8 +165,8 @@ class TerminalWindow:
             self.y_offset += 1
             if self.y_offset > self.height - self.border_width:  #
                 self.y_offset = Y_OFFSET
-            self.window.addstr(self.y_offset, self.x_offset, f"{text}")
-
+            self.window.addstr(self.y_offset, self.x_offset, f"{text}", curses.color_pair(color_pair))
+            
     def finishWrite(self, reset: bool = True):
         if not self.disabled:
             if reset:
@@ -121,19 +180,19 @@ class WindowGrid:
         """
         Create a grid of windows x by y, with the main window being stdscr. Rescale windows to fit the screen when resized.
         """
-        self.windows = list()
+        self.windows = list[TerminalWindow]()
         self.stdscr = stdscr
         self.lines, self.cols = self.stdscr.getmaxyx()
         self.x = x
         self.y = y
-        self.windowWidth = self.cols / x
-        self.windowHeight = self.lines / y
+        self.windowWidth = self.cols // x
+        self.windowHeight = self.lines // y
         self.windowBounds = dict()
 
     def resize(self, lines, cols):
         self.lines, self.cols = lines, cols
-        self.windowWidth = self.cols / self.x
-        self.windowHeight = self.lines / self.y
+        self.windowWidth = self.cols // self.x
+        self.windowHeight = self.lines // self.y
         self.stdscr.clear()
         for window in self.windows:
             self._resizeWindow(window)
@@ -145,10 +204,26 @@ class WindowGrid:
         ncols = self.windowWidth * cell_width
         begin_y = self.windowHeight * grid_y
         begin_x = self.windowWidth * grid_x
+        
+        lines, cols = self.stdscr.getmaxyx()
+
+        if cell_width > 1 and grid_x + cell_width == self.x:
+            # last window in row, take up remaining space
+            
+            # calculate total cols:
+            left = cols - ncols - begin_x
+            ncols += left
+            
+        if cell_height > 1 and grid_y + cell_height == self.y:
+            # last window in column, take up remaining space
+            
+            # calculate total lines:
+            left = lines - nlines - begin_y
+            nlines += left
 
         window.clear()
-        window.mvwin(int(begin_y), int(begin_x))
         window.resize(int(nlines), int(ncols))
+        window.mvwin(int(begin_y), int(begin_x))
 
     def resizeWindow(
         self, window: TerminalWindow, grid_x, grid_y, cell_width=1, cell_height=1
@@ -176,20 +251,12 @@ class WindowGrid:
             raise Exception("Window too small")
         if cell_width > self.x or cell_height > self.y:
             raise Exception("Window too large")
-        # TODO: check for overlap
 
         nlines = self.windowHeight * cell_height
         ncols = self.windowWidth * cell_width
 
         begin_y = self.windowHeight * grid_y
         begin_x = self.windowWidth * grid_x
-        # TODO: also do this when resizing
-        if cell_width > 1 and grid_x + cell_width == self.x:
-            # last window in row, take up remaining space
-            ncols += self.cols % self.x
-        if cell_height > 1 and grid_y + cell_height == self.y:
-            # last window in column, take up remaining space
-            nlines += self.lines % self.y
 
         window = TerminalWindow(int(nlines), int(ncols), int(begin_y), int(begin_x))
         self.windows.append(window)
@@ -203,136 +270,59 @@ class SelfGrowingWindowGrid(WindowGrid):
     Grid that only takes anchor points and grows windows to fill the screen.
     """
 
-    def growWindows(self):
+    def useGridAndGrow(self):
         # sort windows by y, then x
         self.windows.sort(
-            key=lambda x: (self.windowBounds[x][1], self.windowBounds[x][0]),
+            key=lambda x: (self.windowBounds[x][0], self.windowBounds[x][1]),
             reverse=True,
         )
 
-        lines, cols = self.stdscr.getmaxyx()
-        for window in self.windows:
-            bounds = self.windowBounds[window]
-            grid_x, grid_y, cell_width, cell_height = bounds
-            anchor_x = self.windowWidth * grid_x
-            anchor_y = self.windowHeight * grid_y
-
-            # reset cell width and height
-            cell_width = 1
-            cell_height = 1
-
-            # grow until we hit lines
-            while anchor_y + self.windowHeight * cell_height < lines:
-                cell_height += 1
-            # grow until we hit cols
-            while anchor_x + self.windowWidth * cell_width < cols:
-                cell_width += 1
-
-            # update window bounds
-            self.windowBounds[window] = grid_x, grid_y, cell_width, cell_height
-
-            lines, cols = min(anchor_y, lines), max(anchor_x, cols)
-
-        # resize all windows
-        for window in self.windows:
-            self._resizeWindow(window)
-
-    def _checkOverlap(self, window: TerminalWindow, max_x, max_y):
-
-        anchor_y, anchor_x = window.getbegyx()
-
-        for other_window in self.windows:
-            if other_window == window:
-                continue
-            other_bounds = self.windowBounds[other_window]
-            other_grid_x, other_grid_y, other_cell_width, other_cell_height = (
-                other_bounds
-            )
-            other_anchor_x = self.windowWidth * other_grid_x
-            other_anchor_y = self.windowHeight * other_grid_y
-
-            other_max_x = other_anchor_x + self.windowWidth * other_cell_width
-            other_max_y = other_anchor_y + self.windowHeight * other_cell_height
-
-            if (
-                anchor_x < other_max_x
-                and anchor_y < other_max_y
-                and max_x > other_anchor_x
-                and max_y > other_anchor_y
-            ):
-                return True
-        return False
-
-    def growWindowsWidthFirst(self):
-        self.windows.sort(
-            key=lambda x: (self.windowBounds[x][0], self.windowBounds[x][1])
-        )  # sort by x, then y
-        lines, cols = self.stdscr.getmaxyx()
-        for window in self.windows:
-            anchor_y, anchor_x = window.getbegyx()
+        grid = np.array([[0 for _ in range(self.x)] for _ in range(self.y)])
+        # grid will be 0 for empty, i for taken
+        i = 1
+        for window in [window for window in self.windows if not window.disabled]:
             grid_x, grid_y, cell_width, cell_height = self.windowBounds[window]
-
-            # Grow width we hit cols or overlap with another window
-            while anchor_x + self.windowWidth * cell_width < cols:
-                max_y = anchor_y + self.windowHeight * cell_height
-                max_x = anchor_x + self.windowWidth * cell_width
-
-                max_x += self.windowWidth
-
-                if self._checkOverlap(window, max_x, max_y):
-                    break
-                cell_width += 1
-
-            # Grow height we hit lines or overlap with another window
-            while anchor_y + self.windowHeight * cell_height < lines:
-                max_y = anchor_y + self.windowHeight * cell_height
-                max_x = anchor_x + self.windowWidth * cell_width
-
-                max_y += self.windowHeight
-
-                if self._checkOverlap(window, max_x, max_y):
-                    break
-                cell_height += 1
-
-            # Update window bounds
-            self.windowBounds[window] = grid_x, grid_y, cell_width, cell_height
-        # resize all windows
-        for window in self.windows:
-            self._resizeWindow(window)
-
-    def growWindowsHeightFirst(self):
-        self.windows.sort(
-            key=lambda x: (self.windowBounds[x][1], self.windowBounds[x][0])
-        )  # sort by y, then x
-        lines, cols = self.stdscr.getmaxyx()
-        for window in self.windows:
-            anchor_y, anchor_x = window.getbegyx()
+            for x in range(grid_x, grid_x + cell_width):
+                for y in range(grid_y, grid_y + cell_height):
+                    grid[y][x] = i
+            i += 1
+        
+        # now expand windows in y direction
+        for window in [window for window in self.windows if not window.disabled]:
             grid_x, grid_y, cell_width, cell_height = self.windowBounds[window]
-
-            # Grow height we hit lines or overlap with another window
-            while anchor_y + self.windowHeight * cell_height < lines:
-                max_y = anchor_y + self.windowHeight * cell_height
-                max_x = anchor_x + self.windowWidth * cell_width
-
-                max_y += self.windowHeight
-
-                if self._checkOverlap(window, max_x, max_y):
+            # expand downwards
+            while grid_y + cell_height < self.y:
+                # a cell is taken if the cell is not 0 and not i
+                taken = False
+                for x in range(grid_x, grid_x + cell_width):
+                    if grid[grid_y + cell_height][x] != 0 and grid[grid_y + cell_height][x] != i:
+                        taken = True
+                        break
+                if taken:
                     break
                 cell_height += 1
-
-            # Grow width we hit cols or overlap with another window
-            while anchor_x + self.windowWidth * cell_width < cols:
-                max_y = anchor_y + self.windowHeight * cell_height
-                max_x = anchor_x + self.windowWidth * cell_width
-
-                max_x += self.windowWidth
-
-                if self._checkOverlap(window, max_x, max_y):
+            # expand rightwards
+            while grid_x + cell_width < self.x:
+                # a cell is taken if the cell is not 0 and not i
+                taken = False
+                for y in range(grid_y, grid_y + cell_height):
+                    if grid[y][grid_x + cell_width] != 0 and grid[y][grid_x + cell_width] != i:
+                        taken = True
+                        break
+                if taken:
                     break
                 cell_width += 1
-
-            # Update window bounds
             self.windowBounds[window] = grid_x, grid_y, cell_width, cell_height
-        # resize all windows
-        for window in self.windows:
+            # TODO: recalc grid here
+        
+            win_i = 1
+            for window in [window for window in self.windows if not window.disabled]:
+                grid_x, grid_y, cell_width, cell_height = self.windowBounds[window]
+                for x in range(grid_x, grid_x + cell_width):
+                    for y in range(grid_y, grid_y + cell_height):
+                        grid[y][x] = win_i
+                win_i += 1
+        print(grid)
+        
+        for window in [window for window in self.windows if not window.disabled]:
             self._resizeWindow(window)
