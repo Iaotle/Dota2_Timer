@@ -25,7 +25,6 @@ class TormentorTimer(Dota2_Timer):
         self.max_instances = 2
         self.spawn_at = settings.cooldowns.tormentor_spawn_at
         self.reader = easyocr.Reader(["en"])
-        self.side_history = deque(maxlen=2)
     
         
     
@@ -55,17 +54,16 @@ class TormentorTimer(Dota2_Timer):
         return output
     
     # TODO: modify to color the tormentor timer based on the team that killed it, and name it accordingly
-    def writeProgressBar(self, window: TerminalWindow, time_remaining: float, longest_name: int):
+    def writeProgressBar(self, window: TerminalWindow, time_remaining: float, longest_name: int, scheduledTimer: Timer):
         percentage = 1 - (time_remaining / self.duration())
         seconds = "s   " if settings.use_real_time else "ings"
-        time_remaining_string = f"{time_remaining:.0f}".rjust(3)
+        time_remaining_string = f"{time_remaining:.0f}{seconds}".ljust(9)
         
         # fix name and color based on which team killed the tormentor
-        name = self.side_history.popleft()
-        self.side_history.append(name)
+        name = scheduledTimer.getName()
         
         color = 47 if name == "Radiant Tormentor" else 160
-        message = f"{time_remaining_string}{seconds} {name.rjust(longest_name)}"        
+        message = f"{time_remaining_string} {name.rjust(longest_name)}"        
         window.bigProgressBar(percentage, message, color)
     
     # TODO: fix this to detect both properly
@@ -74,52 +72,40 @@ class TormentorTimer(Dota2_Timer):
             return False
         if self.started < self.max_instances:
             self.started += 1
-            if "Radiant Tormentor" in self.detected_image_name and not "Radiant Tormentor" in self.name:
-                self.name = f"Radiant Tormentor"
-                self.side_history.append("radiant")
-            elif "Dire Tormentor" in self.detected_image_name and not "Radiant Tormentor" in self.name:
-                self.name = f"Dire Tormentor"
-                self.side_history.append("dire")
-            elif len(self.timers) > 0:
-                for image, (confidence, time_taken) in output.items():
-                    if confidence > self.confidence:
-                        if "Radiant Tormentor" in image and not "Radiant Tormentor" in self.name:
-                            self.name = f"Radiant Tormentor"
-                            self.side_history.append("radiant")
-                        elif "Dire Tormentor" in image and not "Dire Tormentor" in self.name:
-                            self.name = f"Dire Tormentor"
-                            self.side_history.append("dire")
+            lastTormentorName = self.name
+            detected_side = self.detected_image_name # "Radiant Tormentor" or "Dire Tormentor"
+            try:
                 last_started_time = sorted(self.timers.keys())[-1]
                 since_last = timedelta.total_seconds() - last_started_time.total_seconds()
-                if since_last > 60:
-                    new_timer = Timer(self.duration() - since_last, self.finished)
-                    new_timer.daemon = True
-                    self.timers[timedelta] = new_timer
-                    if (settings.use_real_time):
-                        new_timer.start()
-                    return True
-                else:
-                    self.started -= 1     
-                    return False
-        new_timer = Timer(self.duration(), self.finished)
-        new_timer.daemon = True
-        self.timers[timedelta] = new_timer
-        if (settings.use_real_time):
-            new_timer.start()
-        return True
+            except IndexError:
+                pass
+            if len(self.timers) == 0 or lastTormentorName != detected_side or since_last > 60:
+                self.name = detected_side
+                new_timer = Timer(self.duration(), self.finished)
+                new_timer.setName(detected_side)
+                new_timer.daemon = True
+                self.timers[timedelta] = new_timer
+                if (settings.use_real_time):
+                    new_timer.start()
+                return True
+            else:
+                self.started -= 1
+                return False
+        return False
     
     def finished(self):
         """Execute the specified action after the timeout."""
         self.started -= 1 if self.started > 0 else 0
         if self.onFinishedCallback:
             self.onFinishedCallback(self)
-        side = self.side_history.popleft()
-        if side == "radiant":
+        # get the name of the finished timer:
+        side = self.timers[min(self.timers.keys())].getName()
+        if side == "Radiant Tormentor":
             self.audio_alert('./audio/tormentor/radiant_tormentor_respawn.mp3')
         else:
             self.audio_alert('./audio/tormentor/dire_tormentor_respawn.mp3')
         if self.sound_file:
-            playsound(self.sound_file)
+            threading.Thread(target=lambda: playsound(self.sound_file)).start()
         self.timers.pop(min(self.timers.keys()))
         
     

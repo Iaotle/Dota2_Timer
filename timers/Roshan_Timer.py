@@ -1,3 +1,5 @@
+from threading import Timer
+import threading
 import time
 from timers.Dota2_Timer import Dota2_Timer
 from utils.cooldown import Respawn_Duration
@@ -26,7 +28,7 @@ class RoshanTimer(Dota2_Timer):
 
 
    
-    def writeProgressBar(self, window: TerminalWindow, time_remaining: float, longest_name: int):
+    def writeProgressBar(self, window: TerminalWindow, time_remaining: float, longest_name: int, scheduledTimer: Timer):
         # roshan timer is 8-11 minutes, so we need to calculate progress
         
         
@@ -45,7 +47,7 @@ class RoshanTimer(Dota2_Timer):
         if time_remaining < 180:
             if not self.played_audio_alert:
                 self.played_audio_alert = True
-                playsound(self.sound_file[0]) # sound that roshan will respawn within 3 minutes
+                threading.Thread(target=lambda: playsound(self.sound_file[0])).start()
                 self.max_instances = 2 # allow for a second instance of the timer, since roshan might have spawned in this 3 min window
             percentage_2 = 1 - time_remaining / 180
         else:
@@ -54,7 +56,8 @@ class RoshanTimer(Dota2_Timer):
         
         # first timer is 8 minutes
         seconds = "s   " if settings.use_real_time else "ings"
-        message = f"{time_remaining:.0f}{seconds} {self.name.rjust(longest_name)}"
+        time_remaining_string = f"{time_remaining:.0f}{seconds}".ljust(7)
+        message = f"{time_remaining_string} {self.name.rjust(longest_name)}"
         # ░	▒	▓	
         window.writeRangeProgressBar(percentage_1, percentage_2, message, False,                                   False, lsep="┌",rsep="┐",fill1="▄", fill2="▄", color_pair1=self.color_pair, color_pair2=self.color_pair)
         window.writeRangeProgressBar(percentage_1, percentage_2, message, False,                                   False, lsep="│",rsep="│",fill1="█", fill2="▒", color_pair1=self.color_pair, color_pair2=self.color_pair)
@@ -72,7 +75,7 @@ class RoshanTimer(Dota2_Timer):
         if self.onFinishedCallback:
             self.onFinishedCallback(self)
         if self.sound_file:
-            playsound(self.sound_file[1]) # ending sound
+            threading.Thread(target=lambda: playsound(self.sound_file[1])).start()
         self.played_audio_alert = False
         
     def reset(self):

@@ -142,6 +142,7 @@ class TerminalWindow:
             self.write(ret, color_pair1)
 
     def bigProgressBar(self, progress: float, message: str, color_pair=0):
+        # TODO: fix the formatting of seconds and different bar lengths.
         blanks = "".rjust(len(message))
         self.writeProgressBar(progress,blanks,	lsep="┌",rsep="┐",fill="▄", color_pair=color_pair)
         self.writeProgressBar(progress,blanks,	lsep="│",rsep="│",fill="█", color_pair=color_pair)

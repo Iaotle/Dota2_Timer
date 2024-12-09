@@ -1,4 +1,5 @@
 import datetime
+import threading
 import numpy as np
 import pyautogui
 import asyncio
@@ -33,11 +34,11 @@ class Dota2_Timer:
         self.color_pair = 0
         self.spawn_at = lambda: datetime.timedelta(seconds=0)
     
-    def writeProgressBar(self, window: TerminalWindow, time_remaining: float, longest_name: int):
+    def writeProgressBar(self, window: TerminalWindow, time_remaining: float, longest_name: int, scheduledTimer: Timer):
         percentage = 1 - (time_remaining / self.duration())
         seconds = "s   " if settings.use_real_time else "ings"
-        time_remaining_string = f"{time_remaining:.0f}".rjust(3)
-        message = f"{time_remaining_string}{seconds} {self.name.rjust(longest_name)}"        
+        time_remaining_string = f"{time_remaining:.0f}{seconds}".ljust(9)
+        message = f"{time_remaining_string} {self.name.rjust(longest_name)}"        
         window.bigProgressBar(percentage, message, self.color_pair)
         
     def reset(self):
@@ -122,5 +123,5 @@ class Dota2_Timer:
         if self.onFinishedCallback:
             self.onFinishedCallback(self)
         if self.sound_file:
-            playsound(self.sound_file)
+            threading.Thread(target=lambda: playsound(self.sound_file)).start()
         self.timers.pop(min(self.timers.keys()))

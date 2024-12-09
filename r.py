@@ -278,6 +278,9 @@ def displayTimers(timer_win: TerminalWindow,timers: list[Dota2_Timer]):
     timer_win.startWrite()
 
     longest_name = max([len(timer.name) for timer in timers])
+    # annoying quirk is that we also need to get tormentor timer names
+    # (this is because we use timer names to render progress bars for tormentor)
+    longest_name = max(longest_name, len("Radiant Tormentor"), len("Dire Tormentor"))
     for timer in timers:
         if (not timer):
             continue
@@ -294,7 +297,7 @@ def displayTimers(timer_win: TerminalWindow,timers: list[Dota2_Timer]):
                     if time_remaining > timer.duration():
                         continue # TODO: reset timer, but without breaking the dictionary
                     # THICC PROGRESS BAR
-                    timer.writeProgressBar(timer_win, time_remaining, longest_name)
+                    timer.writeProgressBar(timer_win, time_remaining, longest_name, scheduledTimer)
                     if time_remaining <= 0:
                         finished_accum += 1
                 else:
@@ -303,7 +306,7 @@ def displayTimers(timer_win: TerminalWindow,timers: list[Dota2_Timer]):
                         continue # TODO: reset timer, but without breaking the dictionary
                     if time_remaining > 0:
                         # THICC PROGRESS BAR
-                        timer.writeProgressBar(timer_win, time_remaining, longest_name)
+                        timer.writeProgressBar(timer_win, time_remaining, longest_name, scheduledTimer)
             if finished_accum:
                 timer.finished()
     timer_win.finishWrite()
@@ -411,7 +414,7 @@ def main(stdscr: curses._CursesWindow):
     
     
     # colors
-    roshan_timer.color_pair = 166
+    roshan_timer.color_pair = 203
     rune_timer.color_pair = 11
     reset_rune.color_pair = 11
 
@@ -458,19 +461,19 @@ def main(stdscr: curses._CursesWindow):
             key = stdscr.getkey()
             if key == "q":
                 if history:
-                    # pickle history to file
-                    
-                    # Load existing history if it exists
-                    if os.path.exists("history.pkl"):
-                        with open("history.pkl", "rb") as f:
-                            previous_history, _  = pickle.load(f)
-                            previous_history = deque(previous_history, maxlen=history.max_history)
-                    else:
-                        previous_history = deque(maxlen=history.max_history)
-                    # Merge the current history with the previous history
-                    previous_history.extend(history._history)
-                    with open("history.pkl", "wb") as f:
-                        pickle.dump((previous_history, history.new_game), f)                
+                    try:
+                        # pickle history to file
+                        history_to_save = []
+                        # Load existing history if it exists
+                        if os.path.exists("history.pkl"):
+                            with open("history.pkl", "rb") as f:
+                                history_to_save, _  = pickle.load(f)
+                        # Merge the current history with the previous history
+                        history_to_save.extend(history._history)
+                        with open("history.pkl", "wb") as f:
+                            pickle.dump((history_to_save, history.new_game), f)                
+                    except Exception as e:
+                        print(f"Failed to save history: {e}. Full history for reference:\n{history._history}")
                 break
             if key == "l":
                 if os.path.exists("history.pkl"):
