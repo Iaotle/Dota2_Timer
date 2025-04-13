@@ -5,7 +5,12 @@ The events it keeps track of are:
 - Bottle runes
 - Tormentor kills
 - Roshan
+# Demo
+https://github.com/user-attachments/assets/57e6818e-b6a2-4088-badc-059e4d05e4d5
+# Running
+Download python, install `curses` and all packages from `requirements.txt`
 
+# Details
 I use CV2 library to compare screenshots of Dota 2 to images, and OCR to detect game time. When no game time is detected the app starts to sleep.
 The tickrate dynamically adjusts based on the time gap between screenshots, which means you can use it when watching 16x replays and it will accurately
 count down the time based on the in-game clock. It also means you can pause, fast-forward, or go backwards in time with no issues!
@@ -16,5 +21,6 @@ window.
 
 Recently, Valve has integrated this functionality into the game along with lots more stats (rune spawns, et cetera) if you purchase Dota Plus.
 
-# Running
-Download python, install `curses` and all packages from `requirements.txt`
+
+
+
